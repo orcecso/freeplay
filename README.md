@@ -8,7 +8,7 @@
 No subscriptions. No paywalls. Import Cheat Engine `.CT` tables, scan values live, or subscribe to community trainer repos—just like Tachiyomi.
 
 [![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release%20(.exe)-5b8cff?style=for-the-badge&logo=windows)](../../releases/latest)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20FreePlay-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/vm5ltctpr)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20FreePlay-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/orcecso)
 [![License: MIT](https://img.shields.io/badge/License-MIT-34d399?style=for-the-badge)](LICENSE)
 
 </div>
@@ -85,7 +85,7 @@ Anyone can host a trainer repository on GitHub for free (zero backend required):
 
 FreePlay is 100% free, open-source, and has zero paywalls or subscriptions. If it saved you time or money, consider supporting ongoing development:
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/vm5ltctpr)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/orcecso)
 
 ---
 

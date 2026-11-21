@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 
-export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/vm5ltctpr";
+export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/orcecso";
 
 interface FaqItem {
   question: string;
@@ -37,7 +37,7 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "How can I support FreePlay development?",
     answer:
-      "FreePlay is free and open-source. If it saves you time or makes your single-player gaming more fun, you can support ongoing development by buying a coffee at buymeacoffee.com/vm5ltctpr, sharing the project, or contributing community trainers!",
+      "FreePlay is free and open-source. If it saves you time or makes your single-player gaming more fun, you can support ongoing development by buying a coffee at buymeacoffee.com/orcecso, sharing the project, or contributing community trainers!",
   },
 ];
 
