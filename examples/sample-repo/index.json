@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "repo_id": "freeplay-community",
+  "repo_name": "FreePlay Community Repo (Example)",
+  "description": "Template community repository for declarative single-player trainers.",
+  "homepage": "https://github.com/example/freeplay-repo",
+  "trainers": [
+    {
+      "id": "example-singleplayer-rpg",
+      "title": "Example Single-Player RPG",
+      "processes": ["example-rpg.exe"],
+      "steam_app_id": 123456,
+      "game_version": "1.0.0",
+      "trainer_version": "1.0.0",
+      "author": "community",
+      "path": "trainers/example-rpg.trainer.json",
+      "description": "Health, Gold, and No Stamina Drain."
+    }
+  ]
+}

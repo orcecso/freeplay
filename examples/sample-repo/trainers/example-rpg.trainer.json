@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "example-singleplayer-rpg",
+  "game": {
+    "title": "Example Single-Player RPG",
+    "processes": ["example-rpg.exe"],
+    "steam_app_id": 123456,
+    "game_version": "1.0.0",
+    "pointer_width": "64"
+  },
+  "author": "community",
+  "version": "1.0.0",
+  "description": "Sample declarative trainer manifest hosted in a community repository.",
+  "entries": [
+    {
+      "id": "player_health",
+      "label": "Player Health",
+      "category": "Player",
+      "hotkey": "F1",
+      "kind": "value",
+      "address": {
+        "mode": "module_pointer_chain",
+        "module": "example-rpg.exe",
+        "base_offset": "0x01A2B3C0",
+        "offsets": ["0x10", "0x28"]
+      },
+      "value_type": "i32",
+      "default_value": 100,
+      "freeze": true
+    }
+  ]
+}

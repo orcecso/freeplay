@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b2030" />
+      <stop offset="100%" stop-color="#0f121b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5b8cff" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5b8cff" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.12" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded app icon base -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#bgGrad)" stroke="#2b3348" stroke-width="12" />
+
+  <!-- Subtle inner radial-style accent ring -->
+  <circle cx="256" cy="256" r="168" fill="url(#glowGrad)" />
+
+  <!-- Stylized Play Triangle with precision notch -->
+  <path
+    d="M192 146 C192 132 207 124 219 131 L374 227 C386 234 386 252 374 259 L219 355 C207 362 192 354 192 340 Z"
+    transform="translate(0, 13)"
+    fill="url(#accentGrad)"
+  />
+
+  <!-- Inner cutout chevron / open-source spark -->
+  <path
+    d="M234 206 L310 256 L234 306 L252 256 Z"
+    fill="#121622"
+  />
+</svg>

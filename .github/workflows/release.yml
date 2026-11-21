@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Run Rust workspace tests
+        run: |
+          cargo build -p dummy-target
+          cargo test --workspace
+
+      - name: Build Tauri Windows bundle
+        working-directory: app
+        run: npm run tauri build
+
+      - name: Generate SHA-256 release hashes
+        shell: pwsh
+        run: |
+          $outDir = "release-artifacts"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          $bundleDirs = @("target/release/bundle", "app/src-tauri/target/release/bundle") |
+            Where-Object { Test-Path $_ }
+
+          $files = foreach ($d in $bundleDirs) {
+            Get-ChildItem -Path $d -Recurse -File | Where-Object { $_.Extension -in @(".exe", ".msi") }
+          }
+
+          foreach ($f in $files) {
+            Copy-Item $f.FullName -Destination $outDir -Force
+          }
+
+          $portableCandidates = @("target/release/freeplay-app.exe", "app/src-tauri/target/release/freeplay-app.exe") |
+            Where-Object { Test-Path $_ }
+          foreach ($p in $portableCandidates) {
+            Copy-Item $p -Destination "$outDir/FreePlay-portable-x64.exe" -Force
+            break
+          }
+
+          $hashes = Get-ChildItem -Path $outDir -File | Sort-Object Name | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
+            "$h  $($_.Name)"
+          }
+          $hashes | Out-File -FilePath "$outDir/SHA256SUMS.txt" -Encoding ascii
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeplay-windows
+          path: release-artifacts/*
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-artifacts/* --clobber
+          else
+            gh release create "$TAG" release-artifacts/* --title "FreePlay $TAG" --generate-notes
+          fi

@@ -1,0 +1,8 @@
+[package]
+name = "dummy-target"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Safe local test process that simulates a single-player game for testing trainer-core."
+
+[dependencies]

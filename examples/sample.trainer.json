@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "id": "example-singleplayer-rpg",
+  "game": {
+    "title": "Example Single-Player RPG",
+    "processes": ["example-rpg.exe"],
+    "steam_app_id": 123456,
+    "game_version": "1.0.0",
+    "pointer_width": "64"
+  },
+  "author": "community",
+  "version": "1.0.0",
+  "description": "Sample declarative trainer manifest (safe, no arbitrary scripts).",
+  "entries": [
+    {
+      "id": "player_health",
+      "label": "Player Health",
+      "category": "Player",
+      "hotkey": "F1",
+      "kind": "value",
+      "address": {
+        "mode": "module_pointer_chain",
+        "module": "example-rpg.exe",
+        "base_offset": "0x01A2B3C0",
+        "offsets": ["0x10", "0x28"]
+      },
+      "value_type": "i32",
+      "default_value": 100,
+      "freeze": true,
+      "min": 1,
+      "max": 9999,
+      "step": 10
+    },
+    {
+      "id": "player_gold",
+      "label": "Gold",
+      "category": "Inventory",
+      "hotkey": "F2",
+      "kind": "value",
+      "address": {
+        "mode": "module_pointer_chain",
+        "module": "example-rpg.exe",
+        "base_offset": "0x01A2B3C0",
+        "offsets": ["0x10", "0x2C"]
+      },
+      "value_type": "i32",
+      "default_value": 99999
+    },
+    {
+      "id": "no_stamina_drain",
+      "label": "No Stamina Drain",
+      "category": "Player",
+      "hotkey": "F3",
+      "kind": "aob_patch",
+      "module": "example-rpg.exe",
+      "pattern": "F3 0F 11 43 10 ?? ?? 48 8B",
+      "patch_offset": 0,
+      "patch_bytes": "90 90 90 90 90",
+      "executable_only": true
+    }
+  ]
+}
