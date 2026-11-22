@@ -346,6 +346,14 @@ export const api = {
     IS_DEMO
       ? Promise.resolve(DEMO_MANIFEST)
       : invoke<TrainerManifest>("load_trainer", { trainerId }),
+  renameTrainerEntry: (trainerId: string, entryId: string, newLabel: string) => {
+    if (IS_DEMO) {
+      const target = DEMO_MANIFEST.entries.find((e) => e.id === entryId);
+      if (target && newLabel.trim()) target.label = newLabel.trim();
+      return Promise.resolve({ ...DEMO_MANIFEST, entries: [...DEMO_MANIFEST.entries] });
+    }
+    return invoke<TrainerManifest>("rename_trainer_entry", { trainerId, entryId, newLabel });
+  },
   installTrainer: (repoId: string, trainerId: string) =>
     invoke<InstalledRecord>("install_trainer", { repoId, trainerId }),
   uninstallTrainer: (trainerId: string) => invoke<void>("uninstall_trainer", { trainerId }),

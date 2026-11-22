@@ -16,6 +16,8 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
   const [patches, setPatches] = useState<Record<string, boolean>>({});
   const [exportedXml, setExportedXml] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const isAttachedToThis = session.attached && session.trainer_id === trainerId && session.alive;
@@ -117,6 +119,33 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
     }
   };
 
+  const startEditing = (entry: TrainerEntry) => {
+    setEditingEntryId(entry.id);
+    setEditingLabel(entry.label);
+  };
+
+  const cancelEditing = () => {
+    setEditingEntryId(null);
+    setEditingLabel("");
+  };
+
+  const commitRename = async (entry: TrainerEntry) => {
+    const trimmed = editingLabel.trim();
+    if (!trimmed || trimmed === entry.label) {
+      cancelEditing();
+      return;
+    }
+    try {
+      const updated = await api.renameTrainerEntry(trainerId, entry.id, trimmed);
+      setManifest(updated);
+      setMessage({ kind: "success", text: `Renamed "${entry.label}" to "${trimmed}".` });
+    } catch (e) {
+      setMessage({ kind: "error", text: String(e) });
+    } finally {
+      cancelEditing();
+    }
+  };
+
   const handleExportCt = async () => {
     try {
       const res = await api.exportCt(trainerId);
@@ -201,7 +230,34 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
         <div className="entry-row" key={entry.id}>
           <div>
             <div className="row">
-              <strong>{entry.label}</strong>
+              {editingEntryId === entry.id ? (
+                <input
+                  className="input editable-label-input"
+                  autoFocus
+                  value={editingLabel}
+                  onChange={(e) => setEditingLabel(e.target.value)}
+                  onBlur={() => commitRename(entry)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else if (e.key === "Escape") {
+                      cancelEditing();
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="editable-label-btn"
+                  title="Click to rename"
+                  onClick={() => startEditing(entry)}
+                >
+                  <strong>{entry.label}</strong>
+                  <span className="editable-label-hint" aria-hidden="true">
+                    ✎
+                  </span>
+                </button>
+              )}
               {entry.category && <span className="badge">{entry.category}</span>}
               {entry.hotkey && <span className="badge badge-warning">{entry.hotkey}</span>}
               <span className="muted">

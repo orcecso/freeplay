@@ -6,6 +6,22 @@ interface Props {
   onImported: (trainerId: string) => void;
 }
 
+function formatProcessTitle(processName: string): string {
+  return processName
+    .replace(/\.exe$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function ImportExportView({ onImported }: Props) {
   const [id, setId] = useState("my-imported-game");
   const [gameTitle, setGameTitle] = useState("My Single-Player Game");
@@ -34,8 +50,11 @@ export function ImportExportView({ onImported }: Props) {
 
   const handlePickProcess = (proc: ProcessDto) => {
     setProcessName(proc.name);
-    if (proc.window_title && gameTitle === "My Single-Player Game") {
-      setGameTitle(proc.window_title);
+    const detectedTitle = proc.window_title?.trim() || formatProcessTitle(proc.name);
+    if (detectedTitle) {
+      setGameTitle(detectedTitle);
+      const slug = toSlug(detectedTitle);
+      if (slug) setId(`${slug}-id`);
     }
   };
 

@@ -28,6 +28,15 @@ interface Props {
   onOpenTrainer: (trainerId: string) => void;
 }
 
+function formatProcessTitle(processName: string): string {
+  return processName
+    .replace(/\.exe$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -145,13 +154,14 @@ export function ScannerView({ onOpenTrainer }: Props) {
       setPreview([]);
       setCaptured([]);
       setExportResult(null);
-      if (proc.window_title) {
-        setGameTitle(proc.window_title);
-        const slug = proc.window_title
+      const detectedTitle = proc.window_title?.trim() || formatProcessTitle(proc.name);
+      if (detectedTitle) {
+        setGameTitle(detectedTitle);
+        const slug = detectedTitle
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "");
-        if (slug) setTrainerId(slug);
+        if (slug) setTrainerId(`${slug}-id`);
       }
       setMessage({
         kind: "success",
@@ -449,14 +459,21 @@ export function ScannerView({ onOpenTrainer }: Props) {
       {captured.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
           <h2>Captured Entries ({captured.length}) &amp; Export Details</h2>
+          <div className="muted" style={{ marginBottom: 4 }}>
+            <strong>Tip:</strong> Click any variable name below to rename it (e.g.{" "}
+            <code>Current Coins</code>, <code>Health</code>) before saving to your Library. You can{" "}
+            <strong>+ Capture</strong> multiple values — even across new scans — and save them all
+            together in one trainer.
+          </div>
           {captured.map((item, idx) => (
-            <div className="entry-row" key={item.address}>
+            <div className="entry-row" key={`${item.address}:${item.value_type}`}>
               <div className="row" style={{ flex: 1 }}>
                 <input
                   className="input"
-                  style={{ width: 180 }}
+                  style={{ width: 210 }}
                   value={item.label}
-                  placeholder="Label (e.g. Gold)"
+                  title="Click here to edit the variable name"
+                  placeholder="Click to edit variable name (e.g. Gold)"
                   onChange={(e) =>
                     setCaptured((prev) =>
                       prev.map((c, i) => (i === idx ? { ...c, label: e.target.value } : c))

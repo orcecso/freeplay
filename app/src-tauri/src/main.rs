@@ -190,6 +190,34 @@ fn load_trainer(state: State<'_, AppState>, trainer_id: String) -> Result<Traine
 }
 
 #[tauri::command]
+fn rename_trainer_entry(
+    state: State<'_, AppState>,
+    trainer_id: String,
+    entry_id: String,
+    new_label: String,
+) -> Result<TrainerManifest, String> {
+    let trimmed = new_label.trim();
+    if trimmed.is_empty() {
+        return Err("Entry name cannot be empty.".to_string());
+    }
+    let mut manifest = state
+        .repo
+        .load_installed(&trainer_id)
+        .map_err(|e| e.to_string())?;
+    let entry = manifest
+        .entries
+        .iter_mut()
+        .find(|e| e.id == entry_id)
+        .ok_or_else(|| format!("Entry '{entry_id}' not found."))?;
+    entry.label = trimmed.to_string();
+    state
+        .repo
+        .import_local_manifest(&manifest)
+        .map_err(|e| e.to_string())?;
+    Ok(manifest)
+}
+
+#[tauri::command]
 fn install_trainer(
     state: State<'_, AppState>,
     repo_id: String,
@@ -901,6 +929,7 @@ fn main() {
             check_updates,
             list_installed,
             load_trainer,
+            rename_trainer_entry,
             install_trainer,
             uninstall_trainer,
             import_ct,

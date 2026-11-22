@@ -298,6 +298,44 @@ h2 {
   margin-bottom: 8px;
 }
 
+.editable-label-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 2px 6px;
+  margin: -2px -6px;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.editable-label-btn:hover {
+  background: rgba(91, 140, 255, 0.1);
+  border-color: rgba(91, 140, 255, 0.35);
+}
+
+.editable-label-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.45;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.editable-label-btn:hover .editable-label-hint {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.editable-label-input {
+  width: 220px;
+  padding: 4px 8px;
+  font-weight: 600;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
