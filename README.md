@@ -40,6 +40,16 @@ If you've used **Cheat Engine** before—or if you're a creator who already buil
 
 ---
 
+## Video Demos
+
+- **Live Value Scanner Demo:** [Watch on YouTube](https://youtu.be/AXGxpTdPiEA) — How to attach to a running game, scan and narrow down values, and edit/freeze them live.
+
+[![FreePlay Live Value Scanner Demo](https://img.youtube.com/vi/AXGxpTdPiEA/hqdefault.jpg)](https://youtu.be/AXGxpTdPiEA)
+
+*More demos coming soon (including importing/adding a Cheat Engine `.CT` file and setting up community repositories).*
+
+---
+
 ## Screenshots
 
 ### Live Trainer Controls & One-Click Attach
