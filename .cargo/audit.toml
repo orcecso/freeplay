@@ -1,0 +1,11 @@
+[advisories]
+ignore = [
+    # Inactive optional dependency of serde_with 3.25.0 in Cargo.lock (not compiled into any target).
+    "RUSTSEC-2026-0543",
+    # Transitive Linux-only dependency of Tauri v2 (gtk 0.18 -> glib 0.18 -> glib-macros -> proc-macro-error).
+    # Cannot be upgraded downstream until Tauri migrates off GTK3.
+    "RUSTSEC-2024-0370",
+    # Transitive Linux-only dependency of Tauri v2 (gtk 0.18 / webkit2gtk 2.0 -> glib 0.18.5).
+    # Cannot be upgraded downstream until Tauri migrates off GTK3.
+    "RUSTSEC-2024-0429",
+]

@@ -69,13 +69,14 @@ pub fn import_ct_xml(xml: &str, opts: ImportOptions) -> Result<ImportResult> {
     let mut root_entries: Vec<RawCtEntry> = Vec::new();
     let mut stack: Vec<RawCtEntry> = Vec::new();
     let mut current_tag: Option<String> = None;
+    let mut current_text = String::new();
     let mut in_offsets = false;
     let mut has_lua_script = false;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let tag = e.name().as_ref().to_owned();
                 match tag.as_str() {
                     "CheatEntry" => {
                         stack.push(RawCtEntry::default());
@@ -89,28 +90,51 @@ pub fn import_ct_xml(xml: &str, opts: ImportOptions) -> Result<ImportResult> {
                     _ => {}
                 }
                 current_tag = Some(tag);
+                current_text.clear();
             }
             Ok(Event::Text(e)) => {
-                let text = e.unescape().map_err(SchemaError::Xml)?.into_owned();
-                if let (Some(entry), Some(tag)) = (stack.last_mut(), current_tag.as_deref()) {
-                    match tag {
-                        "Description" => entry.description = strip_ct_quotes(&text),
-                        "VariableType" => entry.variable_type = Some(text),
-                        "Address" => entry.address = Some(text),
-                        "Offset" if in_offsets => entry.offsets.push(text),
-                        "AssemblerScript" => {
-                            entry
-                                .assembler_script
-                                .get_or_insert_with(String::new)
-                                .push_str(&text);
+                let text = e.xml_content(quick_xml::XmlVersion::default());
+                current_text.push_str(&text);
+            }
+            Ok(Event::CData(e)) => {
+                let text = e.xml_content(quick_xml::XmlVersion::default());
+                current_text.push_str(&text);
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if let Some(ch) = e.resolve_char_ref().map_err(SchemaError::Xml)? {
+                    current_text.push(ch);
+                } else {
+                    let name = e.xml_content(quick_xml::XmlVersion::default());
+                    match quick_xml::escape::resolve_xml_entity(&name) {
+                        Some(resolved) => current_text.push_str(resolved),
+                        None => {
+                            current_text.push('&');
+                            current_text.push_str(&name);
+                            current_text.push(';');
                         }
-                        "GroupHeader" if text == "1" => entry.is_group_header = true,
-                        _ => {}
                     }
                 }
             }
             Ok(Event::End(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let tag = e.name().as_ref().to_owned();
+                if let (Some(entry), Some(active_tag)) = (stack.last_mut(), current_tag.as_deref()) {
+                    if active_tag == tag && !current_text.is_empty() {
+                        match active_tag {
+                            "Description" => entry.description = strip_ct_quotes(&current_text),
+                            "VariableType" => entry.variable_type = Some(current_text.clone()),
+                            "Address" => entry.address = Some(current_text.clone()),
+                            "Offset" if in_offsets => entry.offsets.push(current_text.clone()),
+                            "AssemblerScript" => {
+                                entry
+                                    .assembler_script
+                                    .get_or_insert_with(String::new)
+                                    .push_str(&current_text);
+                            }
+                            "GroupHeader" if current_text == "1" => entry.is_group_header = true,
+                            _ => {}
+                        }
+                    }
+                }
                 match tag.as_str() {
                     "CheatEntry" => {
                         if let Some(finished) = stack.pop() {
@@ -127,6 +151,7 @@ pub fn import_ct_xml(xml: &str, opts: ImportOptions) -> Result<ImportResult> {
                     _ => {}
                 }
                 current_tag = None;
+                current_text.clear();
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(SchemaError::Xml(e)),
