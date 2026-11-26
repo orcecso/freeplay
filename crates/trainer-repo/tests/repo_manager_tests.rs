@@ -46,6 +46,7 @@ fn sample_manifest(version: &str) -> TrainerManifest {
                     base_offset: "0x1000".into(),
                     offsets: vec!["0x10".into()],
                 },
+                extra_addresses: Vec::new(),
                 value_type: ValueTypeSchema::I32,
                 default_value: None,
                 freeze: false,
