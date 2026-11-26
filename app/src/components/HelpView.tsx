@@ -32,7 +32,12 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "How does the Value Scanner work?",
     answer:
-      "Open Value Scanner, pick a running single-player game process, and run a First Scan for a value you see in-game (like health, gold, or ammo). Change the value in-game, then run Next Scan (Exact, Increased, Decreased, Changed, or Unchanged) until you narrow down the address. You can edit values directly or export your findings as a reusable trainer.",
+      "Open Value Scanner, pick a running single-player game process, and run a First Scan for a value you see in-game (like health, gold, or ammo). Change the value in-game, then run Next Scan (Exact, Increased, Decreased, Changed, or Unchanged) until you narrow down the address. You can edit values directly or capture and export your findings as a reusable trainer.",
+  },
+  {
+    question: "Why did Next Scan return 0 hits? Which Value Type should I use?",
+    answer:
+      "4 Bytes (i32) is the default because it is fast and matches most classic games. However, many modern indie games (Unity, Godot, GameMaker, etc.) store currency, health, or timers as Float (f32) or Double (f64) — sometimes with hidden decimals. If your current Value Type drops to 0 hits on Next Scan, click Reset, switch Value Type to All (4 Bytes + Float + Double), and scan again.",
   },
   {
     question: "How can I support FreePlay development?",

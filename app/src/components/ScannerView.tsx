@@ -52,7 +52,7 @@ export function ScannerView({ onOpenTrainer }: Props) {
   const [attachedProc, setAttachedProc] = useState<ProcessDto | null>(null);
 
   // Scan controls
-  const [valueType, setValueType] = useState<ScanValueTypeName>("all");
+  const [valueType, setValueType] = useState<ScanValueTypeName>("i32");
   const [scanMode, setScanMode] = useState<
     "exact" | "increased" | "decreased" | "changed" | "unchanged"
   >("exact");
@@ -134,6 +134,7 @@ export function ScannerView({ onOpenTrainer }: Props) {
 
   // Captured entries & trainer metadata for export / sharing
   const [captured, setCaptured] = useState<CapturedEntryInput[]>([]);
+  const [autoCombine, setAutoCombine] = useState(true);
   const [trainerId, setTrainerId] = useState("my-game-trainer");
   const [gameTitle, setGameTitle] = useState("My Single-Player Game");
   const [author, setAuthor] = useState("community");
@@ -228,6 +229,17 @@ export function ScannerView({ onOpenTrainer }: Props) {
     }
   };
 
+  const handleReset = () => {
+    setHasFirstScan(false);
+    setScanMode("exact");
+    setScanValue("");
+    setTotalHits(0);
+    setPreview([]);
+    setEditValues({});
+    setProgress(null);
+    setMessage(null);
+  };
+
   const handleTestWrite = async (hit: ScanHitDto) => {
     const key = `${hit.address}:${hit.value_type}`;
     const raw = editValues[key] ?? hit.value;
@@ -248,21 +260,116 @@ export function ScannerView({ onOpenTrainer }: Props) {
     }
   };
 
+  const isHitCaptured = (hit: ScanHitDto) =>
+    captured.some(
+      (c) =>
+        c.value_type === hit.value_type &&
+        (c.address === hit.address || (c.extra_addresses ?? []).includes(hit.address))
+    );
+
   const handleCapture = (hit: ScanHitDto) => {
-    if (captured.some((c) => c.address === hit.address && c.value_type === hit.value_type)) return;
+    if (isHitCaptured(hit)) return;
     const key = `${hit.address}:${hit.value_type}`;
     const defaultNum = Number(editValues[key] ?? hit.value);
-    setCaptured((prev) => [
-      ...prev,
-      {
-        label: `Value ${prev.length + 1}`,
-        category: "Player",
-        address: hit.address,
-        value_type: hit.value_type,
-        default_value: Number.isNaN(defaultNum) ? undefined : defaultNum,
-        freeze: false,
-      },
-    ]);
+    const parsedDefault = Number.isNaN(defaultNum) ? undefined : defaultNum;
+
+    setCaptured((prev) => {
+      if (autoCombine && parsedDefault !== undefined) {
+        const matchIdx = prev.findIndex(
+          (c) => c.value_type === hit.value_type && c.default_value === parsedDefault
+        );
+        if (matchIdx !== -1) {
+          return prev.map((c, i) =>
+            i === matchIdx
+              ? { ...c, extra_addresses: [...(c.extra_addresses ?? []), hit.address] }
+              : c
+          );
+        }
+      }
+      return [
+        ...prev,
+        {
+          label: `Value ${prev.length + 1}`,
+          category: "Player",
+          address: hit.address,
+          extra_addresses: [],
+          value_type: hit.value_type,
+          default_value: parsedDefault,
+          freeze: false,
+        },
+      ];
+    });
+  };
+
+  const handleCaptureAllCombined = () => {
+    const toAdd = visiblePreview;
+    if (toAdd.length === 0) return;
+
+    setCaptured((prev) => {
+      const next = [...prev];
+      const byType = new Map<string, ScanHitDto[]>();
+      for (const hit of toAdd) {
+        const list = byType.get(hit.value_type) ?? [];
+        list.push(hit);
+        byType.set(hit.value_type, list);
+      }
+
+      for (const [, group] of byType) {
+        const first = group[0];
+        const key = `${first.address}:${first.value_type}`;
+        const defaultNum = Number(editValues[key] ?? first.value);
+        const parsedDefault = Number.isNaN(defaultNum) ? undefined : defaultNum;
+        const addrs = group.map((h) => h.address);
+
+        if (autoCombine && parsedDefault !== undefined) {
+          const matchIdx = next.findIndex(
+            (c) => c.value_type === first.value_type && c.default_value === parsedDefault
+          );
+          if (matchIdx !== -1) {
+            const existing = next[matchIdx];
+            const existingSet = new Set([existing.address, ...(existing.extra_addresses ?? [])]);
+            const fresh = addrs.filter((a) => !existingSet.has(a));
+            next[matchIdx] = {
+              ...existing,
+              extra_addresses: [...(existing.extra_addresses ?? []), ...fresh],
+            };
+            continue;
+          }
+        }
+
+        next.push({
+          label: `Value ${next.length + 1}`,
+          category: "Player",
+          address: addrs[0],
+          extra_addresses: addrs.slice(1),
+          value_type: first.value_type,
+          default_value: parsedDefault,
+          freeze: false,
+        });
+      }
+      return next;
+    });
+  };
+
+  const handleCombineCapturedByType = () => {
+    setCaptured((prev) => {
+      const merged: CapturedEntryInput[] = [];
+      for (const item of prev) {
+        const idx = merged.findIndex((m) => m.value_type === item.value_type);
+        if (idx === -1) {
+          merged.push({ ...item, extra_addresses: [...(item.extra_addresses ?? [])] });
+        } else {
+          const target = merged[idx];
+          const seen = new Set([target.address, ...(target.extra_addresses ?? [])]);
+          const extras = [item.address, ...(item.extra_addresses ?? [])].filter((a) => !seen.has(a));
+          merged[idx] = {
+            ...target,
+            extra_addresses: [...(target.extra_addresses ?? []), ...extras],
+          };
+        }
+      }
+      return merged;
+    });
   };
 
   const handleExport = async (saveToLibrary: boolean) => {
@@ -295,6 +402,10 @@ export function ScannerView({ onOpenTrainer }: Props) {
       setMessage({ kind: "error", text: String(e) });
     }
   };
+
+  const visiblePreview = preview.filter((hit) => !isHitCaptured(hit));
+  const hasCombinableCaptured =
+    new Set(captured.map((c) => c.value_type)).size < captured.length;
 
   return (
     <div>
@@ -333,13 +444,13 @@ export function ScannerView({ onOpenTrainer }: Props) {
               disabled={hasFirstScan}
               onChange={(e) => setValueType(e.target.value as ScanValueTypeName)}
             >
-              <option value="all">All (4 Bytes + Float + Double)</option>
               <option value="i32">4 Bytes (i32)</option>
               <option value="f32">Float (f32)</option>
               <option value="f64">Double (f64)</option>
               <option value="i64">8 Bytes (i64)</option>
               <option value="i16">2 Bytes (i16)</option>
               <option value="u8">Byte (u8)</option>
+              <option value="all">All (4 Bytes + Float + Double)</option>
             </select>
           </label>
           <label>
@@ -381,11 +492,24 @@ export function ScannerView({ onOpenTrainer }: Props) {
           >
             Refresh Values
           </button>
+          <button
+            className="btn btn-secondary"
+            disabled={busy || (!hasFirstScan && !scanValue && !progress)}
+            onClick={handleReset}
+          >
+            Reset
+          </button>
           {hasFirstScan && (
             <span className="muted" style={{ marginLeft: "auto" }}>
               Found: <strong>{totalHits.toLocaleString()}</strong> (showing top {preview.length})
             </span>
           )}
+        </div>
+
+        <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+          <strong>Tip:</strong> Start with <code>4 Bytes (i32)</code>. If Next Scan drops to 0 hits,
+          click <strong>Reset</strong> and try <code>All (4 Bytes + Float + Double)</code> — many
+          games store money, health, or stats as Float or Double.
         </div>
 
         {(busy || progress) && progress && (
@@ -411,11 +535,32 @@ export function ScannerView({ onOpenTrainer }: Props) {
         )}
       </div>
 
-      {preview.length > 0 && (
+      {visiblePreview.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h2>Scan Results</h2>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <h2 style={{ margin: 0 }}>Scan Results</h2>
+            <div className="row" style={{ gap: 12 }}>
+              <label
+                className="row"
+                style={{ gap: 6, fontSize: 12, cursor: "pointer", margin: 0 }}
+                title="Automatically merge newly captured addresses that share the same type and value into one entry"
+              >
+                <input
+                  type="checkbox"
+                  checked={autoCombine}
+                  onChange={(e) => setAutoCombine(e.target.checked)}
+                />
+                <span className="muted">Auto-combine matching</span>
+              </label>
+              {visiblePreview.length >= 2 && visiblePreview.length <= 25 && (
+                <button className="btn btn-secondary" onClick={handleCaptureAllCombined}>
+                  + Capture All ({visiblePreview.length}) as 1 Entry
+                </button>
+              )}
+            </div>
+          </div>
           <div style={{ maxHeight: 240, overflowY: "auto" }}>
-            {preview.map((hit) => {
+            {visiblePreview.map((hit) => {
               const key = `${hit.address}:${hit.value_type}`;
               return (
                 <div className="entry-row" key={key}>
@@ -458,7 +603,18 @@ export function ScannerView({ onOpenTrainer }: Props) {
 
       {captured.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h2>Captured Entries ({captured.length}) &amp; Export Details</h2>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+            <h2 style={{ margin: 0 }}>Captured Entries ({captured.length}) &amp; Export Details</h2>
+            {hasCombinableCaptured && (
+              <button
+                className="btn btn-secondary"
+                onClick={handleCombineCapturedByType}
+                title="Merge captured entries with the same value type into a single combined entry"
+              >
+                Combine Same Type
+              </button>
+            )}
+          </div>
           <div className="muted" style={{ marginBottom: 4 }}>
             <strong>Tip:</strong> Click any variable name below to rename it (e.g.{" "}
             <code>Current Coins</code>, <code>Health</code>) before saving to your Library. You can{" "}
@@ -493,6 +649,14 @@ export function ScannerView({ onOpenTrainer }: Props) {
                 />
                 <code>{item.address}</code>
                 <span className="badge">{item.value_type}</span>
+                {item.extra_addresses && item.extra_addresses.length > 0 && (
+                  <span
+                    className="badge badge-success"
+                    title={[item.address, ...item.extra_addresses].join(", ")}
+                  >
+                    {1 + item.extra_addresses.length} linked
+                  </span>
+                )}
               </div>
               <button
                 className="btn btn-danger"

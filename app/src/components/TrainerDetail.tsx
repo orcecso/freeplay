@@ -18,6 +18,7 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const isAttachedToThis = session.attached && session.trainer_id === trainerId && session.alive;
@@ -161,9 +162,45 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleCombine = async (idsToCombine: string[]) => {
+    if (idsToCombine.length < 2) return;
+    setMessage(null);
+    try {
+      const updated = await api.combineTrainerEntries(trainerId, idsToCombine);
+      setManifest(updated);
+      setSelectedIds([]);
+      setFrozen({});
+      setMessage({
+        kind: "success",
+        text: `Combined ${idsToCombine.length} entries into 1 linked entry.`,
+      });
+    } catch (e) {
+      setMessage({ kind: "error", text: String(e) });
+    }
+  };
+
   if (!manifest) {
     return <div className="muted">Loading trainer...</div>;
   }
+
+  const valueEntries = manifest.entries.filter((e) => e.kind === "value");
+  const combinableGroup = (() => {
+    const byType = new Map<string, string[]>();
+    for (const e of valueEntries) {
+      if (!e.value_type) continue;
+      const list = byType.get(e.value_type) ?? [];
+      list.push(e.id);
+      byType.set(e.value_type, list);
+    }
+    for (const ids of byType.values()) {
+      if (ids.length >= 2) return ids;
+    }
+    return null;
+  })();
 
   return (
     <div>
@@ -182,6 +219,21 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
           </div>
         </div>
         <div className="row">
+          {selectedIds.length >= 2 ? (
+            <button className="btn btn-secondary" onClick={() => handleCombine(selectedIds)}>
+              Combine Selected ({selectedIds.length})
+            </button>
+          ) : (
+            combinableGroup && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => handleCombine(combinableGroup)}
+                title="Combine entries with the same value type into one linked entry"
+              >
+                Combine as 1 ({combinableGroup.length})
+              </button>
+            )
+          )}
           <button className="btn btn-secondary" onClick={handleExportCt}>
             Export .CT
           </button>
@@ -230,6 +282,14 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
         <div className="entry-row" key={entry.id}>
           <div>
             <div className="row">
+              {entry.kind === "value" && valueEntries.length >= 2 && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(entry.id)}
+                  onChange={() => toggleSelect(entry.id)}
+                  title="Select to combine with other entries of the same type"
+                />
+              )}
               {editingEntryId === entry.id ? (
                 <input
                   className="input editable-label-input"
@@ -267,6 +327,16 @@ export function TrainerDetail({ trainerId, session, onSessionChange, onBack }: P
                   ? "AA Script"
                   : "AoB Patch"}
               </span>
+              {entry.kind === "value" &&
+                entry.extra_addresses &&
+                entry.extra_addresses.length > 0 && (
+                  <span
+                    className="badge badge-success"
+                    title="Writes and freezes all linked addresses together"
+                  >
+                    {1 + entry.extra_addresses.length} linked
+                  </span>
+                )}
             </div>
             {entry.description && <div className="muted">{entry.description}</div>}
           </div>

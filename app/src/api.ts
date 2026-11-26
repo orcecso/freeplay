@@ -182,6 +182,7 @@ export interface TrainerEntry {
   hotkey?: string;
   kind: "value" | "aob_patch" | "auto_assembler";
   value_type?: string;
+  extra_addresses?: unknown[];
   default_value?: number;
   freeze?: boolean;
   min?: number;
@@ -250,6 +251,7 @@ export interface CapturedEntryInput {
   label: string;
   category?: string;
   address: string;
+  extra_addresses?: string[];
   value_type: ValueTypeName;
   default_value?: number;
   freeze: boolean;
@@ -354,6 +356,8 @@ export const api = {
     }
     return invoke<TrainerManifest>("rename_trainer_entry", { trainerId, entryId, newLabel });
   },
+  combineTrainerEntries: (trainerId: string, entryIds: string[]) =>
+    invoke<TrainerManifest>("combine_trainer_entries", { trainerId, entryIds }),
   installTrainer: (repoId: string, trainerId: string) =>
     invoke<InstalledRecord>("install_trainer", { repoId, trainerId }),
   uninstallTrainer: (trainerId: string) => invoke<void>("uninstall_trainer", { trainerId }),

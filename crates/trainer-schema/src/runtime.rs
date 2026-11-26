@@ -145,12 +145,18 @@ impl TrainerSession {
         match &entry.kind {
             EntryKind::Value {
                 address,
+                extra_addresses,
                 value_type,
                 ..
             } => {
-                let addr = self.resolve_address(address, entry_id)?;
                 let mem_val = value.to_memory_value(*value_type);
-                Ok(self.process.write_value(addr, &mem_val)?)
+                let addr = self.resolve_address(address, entry_id)?;
+                self.process.write_value(addr, &mem_val)?;
+                for extra in extra_addresses {
+                    let extra_addr = self.resolve_address(extra, entry_id)?;
+                    self.process.write_value(extra_addr, &mem_val)?;
+                }
+                Ok(())
             }
             _ => Err(SchemaError::WrongEntryKind {
                 id: entry_id.into(),
@@ -158,21 +164,77 @@ impl TrainerSession {
         }
     }
 
-    pub fn set_freeze(&self, entry_id: &str, enabled: bool, value: Option<&ScalarValue>) -> Result<()> {
-        if !enabled {
-            self.freezer.unfreeze(entry_id);
-            return Ok(());
+    fn build_freeze_target(
+        &self,
+        spec: &AddressSpec,
+        entry_id: &str,
+        width: PointerWidth,
+    ) -> Result<FreezeTarget> {
+        match spec {
+            AddressSpec::ModulePointerChain {
+                module,
+                base_offset,
+                offsets,
+            } => Ok(FreezeTarget::ModulePointerChain {
+                module: module.clone(),
+                base_offset: parse_hex_usize(base_offset)?,
+                offsets: offsets
+                    .iter()
+                    .map(|o| parse_hex_isize(o))
+                    .collect::<Result<_>>()?,
+                width,
+            }),
+            AddressSpec::Absolute { address, offsets } => Ok(FreezeTarget::PointerChain {
+                base_address: parse_hex_usize(address)?,
+                offsets: offsets
+                    .iter()
+                    .map(|o| parse_hex_isize(o))
+                    .collect::<Result<_>>()?,
+                width,
+            }),
+            AddressSpec::AobOffset { .. } => {
+                let resolved = self.resolve_address(spec, entry_id)?;
+                Ok(FreezeTarget::Absolute(resolved))
+            }
+            AddressSpec::Symbol { symbol, offsets } => {
+                let base = *self
+                    .symbols
+                    .get(&symbol.to_ascii_lowercase())
+                    .ok_or_else(|| SchemaError::SymbolNotRegistered(symbol.clone()))?;
+                Ok(FreezeTarget::PointerChain {
+                    base_address: base,
+                    offsets: offsets
+                        .iter()
+                        .map(|o| parse_hex_isize(o))
+                        .collect::<Result<_>>()?,
+                    width,
+                })
+            }
         }
+    }
 
+    pub fn set_freeze(&self, entry_id: &str, enabled: bool, value: Option<&ScalarValue>) -> Result<()> {
         let entry = self
             .manifest
             .find_entry(entry_id)
             .ok_or_else(|| SchemaError::EntryNotFound(entry_id.into()))?;
+
+        if !enabled {
+            self.freezer.unfreeze(entry_id);
+            if let EntryKind::Value { extra_addresses, .. } = &entry.kind {
+                for idx in 0..extra_addresses.len() {
+                    self.freezer.unfreeze(&format!("{entry_id}#{idx}"));
+                }
+            }
+            return Ok(());
+        }
+
         let width: PointerWidth = self.manifest.game.pointer_width.into();
 
         match &entry.kind {
             EntryKind::Value {
                 address,
+                extra_addresses,
                 value_type,
                 default_value,
                 ..
@@ -185,49 +247,13 @@ impl TrainerSession {
                     self.read_entry(entry_id)?
                 };
 
-                let target = match address {
-                    AddressSpec::ModulePointerChain {
-                        module,
-                        base_offset,
-                        offsets,
-                    } => FreezeTarget::ModulePointerChain {
-                        module: module.clone(),
-                        base_offset: parse_hex_usize(base_offset)?,
-                        offsets: offsets
-                            .iter()
-                            .map(|o| parse_hex_isize(o))
-                            .collect::<Result<_>>()?,
-                        width,
-                    },
-                    AddressSpec::Absolute { address, offsets } => FreezeTarget::PointerChain {
-                        base_address: parse_hex_usize(address)?,
-                        offsets: offsets
-                            .iter()
-                            .map(|o| parse_hex_isize(o))
-                            .collect::<Result<_>>()?,
-                        width,
-                    },
-                    AddressSpec::AobOffset { .. } => {
-                        let resolved = self.resolve_address(address, entry_id)?;
-                        FreezeTarget::Absolute(resolved)
-                    }
-                    AddressSpec::Symbol { symbol, offsets } => {
-                        let base = *self
-                            .symbols
-                            .get(&symbol.to_ascii_lowercase())
-                            .ok_or_else(|| SchemaError::SymbolNotRegistered(symbol.clone()))?;
-                        FreezeTarget::PointerChain {
-                            base_address: base,
-                            offsets: offsets
-                                .iter()
-                                .map(|o| parse_hex_isize(o))
-                                .collect::<Result<_>>()?,
-                            width,
-                        }
-                    }
-                };
-
-                self.freezer.freeze(entry_id, target, mem_val);
+                let target = self.build_freeze_target(address, entry_id, width)?;
+                self.freezer.freeze(entry_id, target, mem_val.clone());
+                for (idx, extra) in extra_addresses.iter().enumerate() {
+                    let extra_target = self.build_freeze_target(extra, entry_id, width)?;
+                    self.freezer
+                        .freeze(format!("{entry_id}#{idx}"), extra_target, mem_val.clone());
+                }
                 Ok(())
             }
             _ => Err(SchemaError::WrongEntryKind {

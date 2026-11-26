@@ -139,6 +139,8 @@ pub enum EntryKind {
     /// Reads, writes, or freezes a typed value at an address/pointer chain/AoB offset.
     Value {
         address: AddressSpec,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        extra_addresses: Vec<AddressSpec>,
         value_type: ValueTypeSchema,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         default_value: Option<ScalarValue>,
@@ -319,7 +321,16 @@ impl TrainerManifest {
             }
 
             match &entry.kind {
-                EntryKind::Value { address, .. } => validate_address_spec(address)?,
+                EntryKind::Value {
+                    address,
+                    extra_addresses,
+                    ..
+                } => {
+                    validate_address_spec(address)?;
+                    for extra in extra_addresses {
+                        validate_address_spec(extra)?;
+                    }
+                }
                 EntryKind::AobPatch {
                     pattern,
                     patch_bytes,

@@ -106,6 +106,8 @@ struct CapturedEntryInput {
     label: String,
     category: Option<String>,
     address: String,
+    #[serde(default)]
+    extra_addresses: Vec<String>,
     value_type: ValueTypeSchema,
     default_value: Option<ScalarValue>,
     freeze: bool,
@@ -214,6 +216,94 @@ fn rename_trainer_entry(
         .repo
         .import_local_manifest(&manifest)
         .map_err(|e| e.to_string())?;
+    Ok(manifest)
+}
+
+#[tauri::command]
+fn combine_trainer_entries(
+    state: State<'_, AppState>,
+    trainer_id: String,
+    entry_ids: Vec<String>,
+) -> Result<TrainerManifest, String> {
+    if entry_ids.len() < 2 {
+        return Err("Select at least 2 entries to combine.".to_string());
+    }
+
+    let mut manifest = state
+        .repo
+        .load_installed(&trainer_id)
+        .map_err(|e| e.to_string())?;
+
+    let primary_id = &entry_ids[0];
+    let primary_idx = manifest
+        .entries
+        .iter()
+        .position(|e| &e.id == primary_id)
+        .ok_or_else(|| format!("Entry '{primary_id}' not found."))?;
+
+    let primary_type = match &manifest.entries[primary_idx].kind {
+        EntryKind::Value { value_type, .. } => *value_type,
+        _ => return Err("Only value entries can be combined.".to_string()),
+    };
+
+    let merge_set: std::collections::HashSet<&str> =
+        entry_ids.iter().skip(1).map(String::as_str).collect();
+
+    let mut collected_specs: Vec<AddressSpec> = Vec::new();
+    let mut removed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for entry in &manifest.entries {
+        if merge_set.contains(entry.id.as_str()) {
+            if let EntryKind::Value {
+                address,
+                extra_addresses,
+                value_type,
+                ..
+            } = &entry.kind
+            {
+                if *value_type != primary_type {
+                    return Err("All combined entries must have the same value type.".to_string());
+                }
+                collected_specs.push(address.clone());
+                collected_specs.extend(extra_addresses.iter().cloned());
+                removed_ids.insert(entry.id.clone());
+            } else {
+                return Err("Only value entries can be combined.".to_string());
+            }
+        }
+    }
+
+    if let EntryKind::Value {
+        address,
+        extra_addresses,
+        ..
+    } = &mut manifest.entries[primary_idx].kind
+    {
+        for spec in collected_specs {
+            if &spec != address && !extra_addresses.contains(&spec) {
+                extra_addresses.push(spec);
+            }
+        }
+    }
+
+    manifest.entries.retain(|e| !removed_ids.contains(&e.id));
+
+    state
+        .repo
+        .import_local_manifest(&manifest)
+        .map_err(|e| e.to_string())?;
+
+    // If currently attached to this trainer, reload its active session with the combined manifest.
+    let mut active_guard = state.active.lock().unwrap();
+    if let Some(active) = active_guard.as_mut() {
+        if active.trainer_id == trainer_id {
+            let proc_handle = Arc::clone(active.session.process());
+            active.session.disable_all();
+            active.session =
+                TrainerSession::new(proc_handle, manifest.clone()).map_err(|e| e.to_string())?;
+        }
+    }
+
     Ok(manifest)
 }
 
@@ -607,7 +697,7 @@ async fn scanner_first_scan(
         let active = guard.as_mut().ok_or("Pick a running process first.")?;
 
         let mut last_emit = Instant::now() - Duration::from_secs(1);
-        let mut emit_progress = |p: trainer_core::ScanProgress| {
+        let emit_progress = |p: trainer_core::ScanProgress| {
             let finished = p.total > 0 && p.current >= p.total;
             if finished || last_emit.elapsed() >= Duration::from_millis(60) {
                 last_emit = Instant::now();
@@ -762,18 +852,17 @@ fn scanner_export_trainer(
     let mut used = std::collections::HashSet::new();
     let mut built_entries = Vec::with_capacity(entries.len());
 
-    for item in entries {
-        let trimmed = item
-            .address
+    let resolve_spec = |raw_addr: &str| -> Result<AddressSpec, String> {
+        let trimmed = raw_addr
             .trim()
             .strip_prefix("0x")
-            .or_else(|| item.address.trim().strip_prefix("0X"))
-            .unwrap_or(item.address.trim());
+            .or_else(|| raw_addr.trim().strip_prefix("0X"))
+            .unwrap_or(raw_addr.trim());
         let addr_num = usize::from_str_radix(trimmed, 16)
-            .map_err(|_| format!("Invalid hex address '{}'", item.address))?;
+            .map_err(|_| format!("Invalid hex address '{raw_addr}'"))?;
 
         // Automatically use portable ModulePointerChain if the address lives inside a loaded module.
-        let address_spec = if let Some(active) = scanner_guard.as_ref() {
+        Ok(if let Some(active) = scanner_guard.as_ref() {
             if let Some((module, offset)) = resolve_static_module(&active.process, addr_num) {
                 AddressSpec::ModulePointerChain {
                     module,
@@ -791,7 +880,15 @@ fn scanner_export_trainer(
                 address: format!("0x{addr_num:X}"),
                 offsets: Vec::new(),
             }
-        };
+        })
+    };
+
+    for item in entries {
+        let address_spec = resolve_spec(&item.address)?;
+        let mut extra_specs = Vec::with_capacity(item.extra_addresses.len());
+        for extra in &item.extra_addresses {
+            extra_specs.push(resolve_spec(extra)?);
+        }
 
         let base_slug: String = item
             .label
@@ -816,6 +913,7 @@ fn scanner_export_trainer(
             hotkey: None,
             kind: EntryKind::Value {
                 address: address_spec,
+                extra_addresses: extra_specs,
                 value_type: item.value_type,
                 default_value: item.default_value,
                 freeze: item.freeze,
@@ -930,6 +1028,7 @@ fn main() {
             list_installed,
             load_trainer,
             rename_trainer_entry,
+            combine_trainer_entries,
             install_trainer,
             uninstall_trainer,
             import_ct,

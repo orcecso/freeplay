@@ -321,6 +321,7 @@ fn flatten_raw_entries(
             hotkey: None,
             kind: EntryKind::Value {
                 address,
+                extra_addresses: Vec::new(),
                 value_type,
                 default_value: None,
                 freeze: false,
