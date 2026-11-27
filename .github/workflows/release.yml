@@ -195,8 +195,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" release-artifacts/* --clobber
+          REPO="${{ github.repository }}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-artifacts/* --repo "$REPO" --clobber
           else
-            gh release create "$TAG" release-artifacts/* --title "FreePlay $TAG" --generate-notes
+            gh release create "$TAG" release-artifacts/* --repo "$REPO" --title "FreePlay $TAG" --generate-notes
           fi
