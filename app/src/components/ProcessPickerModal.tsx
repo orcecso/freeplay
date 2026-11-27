@@ -34,6 +34,15 @@ export function ProcessPickerModal({ open, onClose, onSelect }: Props) {
     }
   }, [open, includeSystem]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const q = query.trim().toLowerCase();
@@ -52,7 +61,7 @@ export function ProcessPickerModal({ open, onClose, onSelect }: Props) {
           <div>
             <h2 style={{ margin: 0 }}>Select Running Game / App</h2>
             <div className="muted">
-              Showing third-party apps & games (Windows system processes hidden by default).
+              Showing user apps & games, including Steam / Proton titles (system processes hidden by default).
             </div>
           </div>
           <button className="btn btn-secondary" onClick={onClose}>
@@ -87,7 +96,7 @@ export function ProcessPickerModal({ open, onClose, onSelect }: Props) {
             checked={includeSystem}
             onChange={(e) => setIncludeSystem(e.target.checked)}
           />
-          <span>Show Windows system processes</span>
+          <span>Show OS system processes</span>
         </label>
 
         {error && <div className="banner error">{error}</div>}
@@ -114,7 +123,15 @@ export function ProcessPickerModal({ open, onClose, onSelect }: Props) {
                 <div style={{ textAlign: "left" }}>
                   <div className="row">
                     <strong>{p.window_title || p.name}</strong>
-                    {p.window_title && <span className="badge badge-success">Window</span>}
+                    {p.window_title && (
+                      <span className="badge badge-success">
+                        {p.window_title.endsWith("(Proton)")
+                          ? "Proton"
+                          : p.window_title.endsWith("(Steam)")
+                            ? "Steam"
+                            : "Window"}
+                      </span>
+                    )}
                   </div>
                   <div className="muted">
                     <code>{p.name}</code> · PID {p.pid}

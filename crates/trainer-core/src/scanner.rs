@@ -1,5 +1,5 @@
 use crate::error::Result;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 use crate::error::TrainerError;
 use crate::memory::{MemoryValue, ValueType};
 use crate::process::ProcessHandle;
@@ -88,7 +88,6 @@ impl MemoryScanner {
     }
 
     /// Same as `first_scan`, invoking `on_progress` periodically with bytes/regions/hits counts.
-    #[cfg(windows)]
     pub fn first_scan_with_progress<F>(
         &mut self,
         process: &ProcessHandle,
@@ -102,36 +101,10 @@ impl MemoryScanner {
         let stride = self.value_type.byte_len();
 
         // Pass 1: enumerate committed writable regions so we know exact total bytes & region count.
-        let mut regions: Vec<(usize, usize)> = Vec::new();
-        let mut total_bytes: usize = 0;
-        let mut cursor: usize = 0;
-
-        loop {
-            let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
-            let q = unsafe {
-                VirtualQueryEx(
-                    process.raw_handle(),
-                    cursor as *const c_void,
-                    &mut mbi,
-                    size_of::<MEMORY_BASIC_INFORMATION>(),
-                )
-            };
-            if q == 0 || mbi.RegionSize == 0 {
-                break;
-            }
-            let base = mbi.BaseAddress as usize;
-            let region_size = mbi.RegionSize;
-            let next_cursor = base.saturating_add(region_size);
-
-            if mbi.State == MEM_COMMIT && is_writable_protection(mbi.Protect) {
-                regions.push((base, region_size));
-                total_bytes = total_bytes.saturating_add(region_size);
-            }
-            if next_cursor <= cursor {
-                break;
-            }
-            cursor = next_cursor;
-        }
+        let regions = collect_writable_regions(process)?;
+        let total_bytes: usize = regions
+            .iter()
+            .fold(0usize, |acc, &(_, sz)| acc.saturating_add(sz));
 
         let regions_total = regions.len();
         let mut scanned_bytes: usize = 0;
@@ -199,7 +172,6 @@ impl MemoryScanner {
 
     /// Scans writable memory in a single pass for `i32` (4 Bytes), `f32` (Float), and `f64` (Double)
     /// simultaneously—matching Cheat Engine's "All" value type mode.
-    #[cfg(windows)]
     pub fn first_scan_all_with_progress<F>(
         &mut self,
         process: &ProcessHandle,
@@ -222,36 +194,10 @@ impl MemoryScanner {
         let target_f32 = target_num as f32;
 
         // Pass 1: enumerate committed writable regions
-        let mut regions: Vec<(usize, usize)> = Vec::new();
-        let mut total_bytes: usize = 0;
-        let mut cursor: usize = 0;
-
-        loop {
-            let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
-            let q = unsafe {
-                VirtualQueryEx(
-                    process.raw_handle(),
-                    cursor as *const c_void,
-                    &mut mbi,
-                    size_of::<MEMORY_BASIC_INFORMATION>(),
-                )
-            };
-            if q == 0 || mbi.RegionSize == 0 {
-                break;
-            }
-            let base = mbi.BaseAddress as usize;
-            let region_size = mbi.RegionSize;
-            let next_cursor = base.saturating_add(region_size);
-
-            if mbi.State == MEM_COMMIT && is_writable_protection(mbi.Protect) {
-                regions.push((base, region_size));
-                total_bytes = total_bytes.saturating_add(region_size);
-            }
-            if next_cursor <= cursor {
-                break;
-            }
-            cursor = next_cursor;
-        }
+        let regions = collect_writable_regions(process)?;
+        let total_bytes: usize = regions
+            .iter()
+            .fold(0usize, |acc, &(_, sz)| acc.saturating_add(sz));
 
         let regions_total = regions.len();
         let mut scanned_bytes: usize = 0;
@@ -334,32 +280,6 @@ impl MemoryScanner {
         });
 
         Ok(self.hits.len())
-    }
-
-    #[cfg(not(windows))]
-    pub fn first_scan_all_with_progress<F>(
-        &mut self,
-        _process: &ProcessHandle,
-        _target_num: f64,
-        _on_progress: F,
-    ) -> Result<usize>
-    where
-        F: FnMut(ScanProgress),
-    {
-        Err(TrainerError::UnsupportedPlatform)
-    }
-
-    #[cfg(not(windows))]
-    pub fn first_scan_with_progress<F>(
-        &mut self,
-        _process: &ProcessHandle,
-        _target: &MemoryValue,
-        _on_progress: F,
-    ) -> Result<usize>
-    where
-        F: FnMut(ScanProgress),
-    {
-        Err(TrainerError::UnsupportedPlatform)
     }
 
     /// Narrows the existing candidate list using `filter`.
@@ -473,6 +393,55 @@ pub fn resolve_static_module(process: &ProcessHandle, address: usize) -> Option<
         }
     }
     None
+}
+
+#[cfg(windows)]
+fn collect_writable_regions(process: &ProcessHandle) -> Result<Vec<(usize, usize)>> {
+    let mut regions: Vec<(usize, usize)> = Vec::new();
+    let mut cursor: usize = 0;
+
+    loop {
+        let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
+        let q = unsafe {
+            VirtualQueryEx(
+                process.raw_handle(),
+                cursor as *const c_void,
+                &mut mbi,
+                size_of::<MEMORY_BASIC_INFORMATION>(),
+            )
+        };
+        if q == 0 || mbi.RegionSize == 0 {
+            break;
+        }
+        let base = mbi.BaseAddress as usize;
+        let region_size = mbi.RegionSize;
+        let next_cursor = base.saturating_add(region_size);
+
+        if mbi.State == MEM_COMMIT && is_writable_protection(mbi.Protect) {
+            regions.push((base, region_size));
+        }
+        if next_cursor <= cursor {
+            break;
+        }
+        cursor = next_cursor;
+    }
+
+    Ok(regions)
+}
+
+#[cfg(target_os = "linux")]
+fn collect_writable_regions(process: &ProcessHandle) -> Result<Vec<(usize, usize)>> {
+    let maps = crate::linux::read_memory_regions(process.pid())?;
+    Ok(maps
+        .into_iter()
+        .filter(|r| r.is_scannable() && r.writable)
+        .map(|r| (r.start, r.size()))
+        .collect())
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn collect_writable_regions(_process: &ProcessHandle) -> Result<Vec<(usize, usize)>> {
+    Err(TrainerError::UnsupportedPlatform)
 }
 
 #[cfg(windows)]

@@ -35,13 +35,17 @@ const PROTECTED_SERVICE_PROCESSES: &[&str] = &[
     "wellbia.exe",
 ];
 
-/// Known anti-cheat DLLs that may be loaded directly into a game process.
+/// Known anti-cheat DLLs / shared libraries that may be loaded directly into a game process.
 const BLOCKED_MODULE_NAMES: &[&str] = &[
     "easyanticheat_x64.dll",
     "easyanticheat_x86.dll",
+    "easyanticheat_x64.so",
+    "libeasyanticheat.so",
     "eossdk-win64-shipping.dll",
     "beclient_x64.dll",
     "beclient.dll",
+    "beclient_x64.so",
+    "libbeclient.so",
     "vgk.dll",
     "vgc.dll",
     "vac.dll",

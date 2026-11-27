@@ -128,7 +128,12 @@ impl ProcessHandle {
         Ok(buf)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn read_bytes(&self, address: usize, len: usize) -> Result<Vec<u8>> {
+        crate::linux::read_bytes_linux(self.pid(), self.mem_file(), address, len)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn read_bytes(&self, _address: usize, _len: usize) -> Result<Vec<u8>> {
         Err(TrainerError::UnsupportedPlatform)
     }
@@ -160,7 +165,12 @@ impl ProcessHandle {
         Ok(())
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn write_bytes(&self, address: usize, data: &[u8]) -> Result<()> {
+        crate::linux::write_bytes_linux(self.pid(), self.mem_file(), address, data, false)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn write_bytes(&self, _address: usize, _data: &[u8]) -> Result<()> {
         Err(TrainerError::UnsupportedPlatform)
     }
@@ -296,7 +306,16 @@ impl ProcessHandle {
         Ok(ptr as usize)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn alloc_near(&self, _near_address: usize, _size: usize) -> Result<usize> {
+        Err(TrainerError::UnsupportedOperation(
+            "Auto Assembler remote code caves (alloc) are not yet supported on Linux; \
+             Value entries, Pointer Chains, Freezing, and AoB Byte Patches work normally."
+                .into(),
+        ))
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn alloc_near(&self, _near_address: usize, _size: usize) -> Result<usize> {
         Err(TrainerError::UnsupportedPlatform)
     }
@@ -314,7 +333,14 @@ impl ProcessHandle {
         Ok(())
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn free_memory(&self, _address: usize) -> Result<()> {
+        Err(TrainerError::UnsupportedOperation(
+            "Remote memory release is not yet supported on Linux.".into(),
+        ))
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn free_memory(&self, _address: usize) -> Result<()> {
         Err(TrainerError::UnsupportedPlatform)
     }

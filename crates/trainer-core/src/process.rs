@@ -44,12 +44,14 @@ pub struct ModuleInfo {
     pub size: usize,
 }
 
-/// RAII wrapper around a Windows process handle opened with VM read/write/operation + query access.
+/// RAII wrapper around an attached process handle (Windows `HANDLE` or Linux `/proc/<pid>/mem`).
 #[derive(Debug)]
 pub struct ProcessHandle {
     pid: u32,
     #[cfg(windows)]
     handle: HANDLE,
+    #[cfg(target_os = "linux")]
+    mem_file: std::fs::File,
 }
 
 // SAFETY: Windows process HANDLEs are valid across threads in the same process.
@@ -207,7 +209,12 @@ pub fn list_processes() -> Result<Vec<ProcessInfo>> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn list_processes() -> Result<Vec<ProcessInfo>> {
+    crate::linux::list_processes_linux()
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn list_processes() -> Result<Vec<ProcessInfo>> {
     Err(TrainerError::UnsupportedPlatform)
 }
@@ -249,7 +256,18 @@ impl ProcessHandle {
         Ok(process)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn attach_pid(pid: u32) -> Result<Self> {
+        crate::guard::ensure_safe_to_attach(pid)?;
+        let mem_file = crate::linux::open_proc_mem(pid)?;
+        let process = Self { pid, mem_file };
+        if let Ok(modules) = process.list_modules() {
+            crate::guard::ensure_no_anticheat_modules(&modules)?;
+        }
+        Ok(process)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn attach_pid(_pid: u32) -> Result<Self> {
         Err(TrainerError::UnsupportedPlatform)
     }
@@ -272,6 +290,11 @@ impl ProcessHandle {
         self.handle
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn mem_file(&self) -> &std::fs::File {
+        &self.mem_file
+    }
+
     #[cfg(windows)]
     pub fn is_alive(&self) -> bool {
         unsafe {
@@ -283,7 +306,12 @@ impl ProcessHandle {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn is_alive(&self) -> bool {
+        crate::linux::is_process_alive(self.pid)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn is_alive(&self) -> bool {
         false
     }
@@ -322,7 +350,12 @@ impl ProcessHandle {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn list_modules(&self) -> Result<Vec<ModuleInfo>> {
+        crate::linux::list_modules_from_maps(self.pid)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn list_modules(&self) -> Result<Vec<ModuleInfo>> {
         Err(TrainerError::UnsupportedPlatform)
     }

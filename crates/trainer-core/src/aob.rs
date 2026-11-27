@@ -190,7 +190,46 @@ impl ProcessHandle {
         Ok(results)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    pub fn scan_aob(&self, pattern: &AobPattern, opts: ScanOptions) -> Result<Vec<usize>> {
+        let regions = crate::linux::read_memory_regions(self.pid())?;
+        let start_limit = opts.start_address.unwrap_or(0);
+        let end_limit = opts.end_address.unwrap_or(usize::MAX);
+        let mut results = Vec::new();
+
+        for region in regions {
+            if !region.is_scannable() {
+                continue;
+            }
+            if opts.executable_only && !region.executable {
+                continue;
+            }
+            if region.end <= start_limit || region.start >= end_limit {
+                continue;
+            }
+
+            let read_start = region.start.max(start_limit);
+            let read_end = region.end.min(end_limit);
+            if read_end <= read_start {
+                continue;
+            }
+            let read_len = read_end - read_start;
+            if let Ok(buf) = self.read_bytes(read_start, read_len) {
+                for rel_offset in pattern.find_all_in(&buf) {
+                    results.push(read_start + rel_offset);
+                    if let Some(max) = opts.max_results {
+                        if results.len() >= max {
+                            return Ok(results);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
     pub fn scan_aob(&self, _pattern: &AobPattern, _opts: ScanOptions) -> Result<Vec<usize>> {
         Err(TrainerError::UnsupportedPlatform)
     }

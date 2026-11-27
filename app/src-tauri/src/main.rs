@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State, Window};
+use tauri::{Emitter, Manager, State, Window};
 use trainer_core::{
     find_processes_by_name, list_processes, resolve_static_module, MemoryScanner, MemoryValue,
     ProcessHandle, ScanFilter, ValueType,
@@ -991,21 +991,60 @@ fn open_external_url(url: String) -> Result<(), String> {
             .map_err(|e| format!("failed to open browser: {e}"))?;
         Ok(())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("failed to open browser via xdg-open: {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let _ = url;
-        Err("Opening external URLs is only supported on Windows.".to_string())
+        Err("Opening external URLs is not supported on this platform.".to_string())
     }
 }
 
-fn default_data_dir() -> PathBuf {
-    if let Some(app_data) = std::env::var_os("LOCALAPPDATA") {
-        PathBuf::from(app_data).join("FreePlay")
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".freeplay-data")
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle, state: State<'_, AppState>) {
+    if let Ok(mut guard) = state.active.lock() {
+        if let Some(mut active) = guard.take() {
+            active.session.disable_all();
+        }
     }
+    if let Ok(mut guard) = state.scanner.lock() {
+        *guard = None;
+    }
+    app.exit(0);
+}
+
+fn default_data_dir() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(app_data) = std::env::var_os("LOCALAPPDATA") {
+            return PathBuf::from(app_data).join("FreePlay");
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(xdg) = std::env::var_os("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return PathBuf::from(xdg).join("FreePlay");
+            }
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("FreePlay");
+            }
+        }
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(".freeplay-data")
 }
 
 fn main() {
@@ -1018,6 +1057,27 @@ fn main() {
 
     tauri::Builder::default()
         .manage(state)
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                let _ = window.emit("app-close-requested", ());
+            }
+            tauri::WindowEvent::Destroyed => {
+                let app = window.app_handle();
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Ok(mut guard) = state.active.lock() {
+                        if let Some(mut active) = guard.take() {
+                            active.session.disable_all();
+                        }
+                    }
+                    if let Ok(mut guard) = state.scanner.lock() {
+                        *guard = None;
+                    }
+                }
+                app.exit(0);
+            }
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             list_repos,
             add_repo,
@@ -1051,6 +1111,7 @@ fn main() {
             scanner_write_address,
             scanner_export_trainer,
             open_external_url,
+            exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FreePlay");

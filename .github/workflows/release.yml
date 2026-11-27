@@ -42,12 +42,12 @@ jobs:
 
       - name: Build Tauri Windows bundle
         working-directory: app
-        run: npm run tauri build
+        run: npm run tauri build -- --bundles msi,nsis
 
-      - name: Generate SHA-256 release hashes
+      - name: Stage Windows release artifacts
         shell: pwsh
         run: |
-          $outDir = "release-artifacts"
+          $outDir = "release-artifacts-windows"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
           $bundleDirs = @("target/release/bundle", "app/src-tauri/target/release/bundle") |
@@ -68,20 +68,128 @@ jobs:
             break
           }
 
-          $hashes = Get-ChildItem -Path $outDir -File | Sort-Object Name | ForEach-Object {
-            $h = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
-            "$h  $($_.Name)"
-          }
-          $hashes | Out-File -FilePath "$outDir/SHA256SUMS.txt" -Encoding ascii
-
-      - name: Upload build artifacts
+      - name: Upload Windows build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: freeplay-windows
-          path: release-artifacts/*
+          path: release-artifacts-windows/*
+
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Run Rust workspace tests (Linux live memory engine)
+        run: |
+          cargo build -p dummy-target
+          cargo test --workspace
+
+      - name: Build Tauri Linux bundles (.AppImage & .deb)
+        working-directory: app
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npm run tauri build -- --bundles appimage,deb
+
+      - name: Stage Linux & Steam Deck release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          outDir="release-artifacts-linux"
+          mkdir -p "$outDir"
+
+          for d in target/release/bundle app/src-tauri/target/release/bundle; do
+            if [ -d "$d" ]; then
+              find "$d" -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec cp -f {} "$outDir/" \;
+            fi
+          done
+
+          # Package Steam Deck / portable Linux tarball with one-step CAP_SYS_PTRACE installer
+          binPath=""
+          for p in target/release/freeplay-app app/src-tauri/target/release/freeplay-app; do
+            if [ -f "$p" ]; then
+              binPath="$p"
+              break
+            fi
+          done
+
+          if [ -n "$binPath" ]; then
+            pkgDir="FreePlay-linux-x64"
+            mkdir -p "$pkgDir"
+            cp "$binPath" "$pkgDir/freeplay-app"
+            chmod +x "$pkgDir/freeplay-app"
+            cp scripts/install-steamdeck.sh "$pkgDir/install-steamdeck.sh"
+            chmod +x "$pkgDir/install-steamdeck.sh"
+            cp app/src-tauri/icons/128x128.png "$pkgDir/freeplay.png"
+            tar -czf "$outDir/FreePlay-linux-x64-steamdeck.tar.gz" "$pkgDir"
+          fi
+
+      - name: Upload Linux build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeplay-linux
+          path: release-artifacts-linux/*
+
+  publish-release:
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: freeplay-windows
+          path: release-artifacts
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: freeplay-linux
+          path: release-artifacts
+
+      - name: Generate unified SHA-256 checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          sha256sum * | sort -k2 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

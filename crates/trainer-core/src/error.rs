@@ -26,10 +26,19 @@ pub enum TrainerError {
     #[error("windows API error in {context}: OS error {code}")]
     WindowsApi { context: &'static str, code: u32 },
 
+    #[error("linux API error in {context}: errno {code}")]
+    LinuxApi { context: &'static str, code: i32 },
+
+    #[error("permission denied: {0}")]
+    PermissionDenied(String),
+
     #[error("refused to attach: active anti-cheat detected ({0})")]
     AntiCheatDetected(String),
 
-    #[error("unsupported platform: trainer-core currently requires Windows")]
+    #[error("unsupported operation on this platform: {0}")]
+    UnsupportedOperation(String),
+
+    #[error("unsupported platform: trainer-core supports Windows and Linux")]
     UnsupportedPlatform,
 }
 

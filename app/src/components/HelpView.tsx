@@ -12,12 +12,22 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is FreePlay safe to use? Does it work on multiplayer games?",
     answer:
-      "FreePlay is strictly built for offline, single-player games. It uses standard Windows user-mode APIs only and actively refuses to attach if known anti-cheat services or modules (such as Easy Anti-Cheat, BattlEye, or Vanguard) are detected. Never use trainers in online or multiplayer games.",
+      "FreePlay is strictly built for offline, single-player games. It uses standard user-mode OS memory APIs only (Win32 on Windows, /proc & process_vm on Linux/SteamOS) and actively refuses to attach if known anti-cheat services or modules (such as Easy Anti-Cheat, BattlEye, or Vanguard) are detected. Never use trainers in online or multiplayer games.",
+  },
+  {
+    question: "Does FreePlay work on Linux, Steam Deck, ROG Ally, and Legion Go?",
+    answer:
+      "Yes! Windows handhelds (ROG Ally, Legion Go, MSI Claw) run the Windows build directly. Linux desktops and Steam Deck (SteamOS / Bazzite) run the native Linux build and automatically detect both native Linux games and Windows games running through Proton—meaning existing Windows .CT tables and community repos work on Steam Deck too. Gamepad controls are built in (LB/RB switches tabs, D-Pad/Left Stick navigates, A selects, B goes back, Right Stick scrolls).",
+  },
+  {
+    question: "Why did FreePlay say permission denied when attaching on Linux / Steam Deck?",
+    answer:
+      "Linux restricts cross-process memory access by default (kernel.yama.ptrace_scope = 1). On Steam Deck or Linux desktops, run the bundled install-steamdeck.sh script (which installs FreePlay to ~/.local/bin and grants CAP_SYS_PTRACE once) or run `sudo setcap cap_sys_ptrace=eip /path/to/freeplay-app`. You can also temporarily run `sudo sysctl -w kernel.yama.ptrace_scope=0` for the current session.",
   },
   {
     question: "Why did FreePlay refuse to attach to my game?",
     answer:
-      "There are two common reasons: (1) an anti-cheat service or protected module was detected, which triggers FreePlay's safety guard, or (2) the game is running with elevated (Administrator) privileges while FreePlay is not. Make sure the game is an offline single-player title and try matching privilege levels if needed.",
+      "There are two common reasons: (1) an anti-cheat service or protected module was detected, which triggers FreePlay's safety guard, or (2) insufficient OS permissions (on Windows, the game is running as Administrator while FreePlay is not; on Linux/SteamOS, CAP_SYS_PTRACE or ptrace_scope=0 is required).",
   },
   {
     question: "How do I install trainers from a community repository?",
@@ -155,8 +165,9 @@ export function HelpView() {
               Strictly for <strong>offline, single-player games</strong> only.
             </li>
             <li>
-              <strong>No anti-cheat or DRM bypasses:</strong> uses standard Windows user-mode APIs
-              and automatically refuses to attach when anti-cheat software is detected.
+              <strong>No anti-cheat or DRM bypasses:</strong> uses standard user-mode OS APIs
+              (Windows &amp; Linux/SteamOS) and automatically refuses to attach when anti-cheat
+              software is detected.
             </li>
             <li>
               <strong>No multiplayer or DLC unlocking:</strong> do not use or publish trainers for

@@ -743,7 +743,7 @@ dependencies = [
 
 [[package]]
 name = "dummy-target"
-version = "0.2.4"
+version = "0.3.0"
 
 [[package]]
 name = "dunce"
@@ -886,7 +886,7 @@ dependencies = [
 
 [[package]]
 name = "freeplay-app"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3877,15 +3877,16 @@ dependencies = [
 
 [[package]]
 name = "trainer-core"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
+ "libc",
  "thiserror 2.0.21",
  "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "trainer-repo"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3897,7 +3898,7 @@ dependencies = [
 
 [[package]]
 name = "trainer-schema"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "iced-x86",
  "quick-xml",

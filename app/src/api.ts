@@ -487,4 +487,5 @@ export const api = {
       window.open(url, "_blank", "noopener,noreferrer");
     }
   },
+  exitApp: () => invoke<void>("exit_app"),
 };

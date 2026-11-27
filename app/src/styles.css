@@ -616,3 +616,112 @@ label {
   color: var(--text-muted);
   line-height: 1.55;
 }
+
+.modal-card {
+  width: min(520px, 92vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.gamepad-hint {
+  background: rgba(91, 140, 255, 0.12);
+  border: 1px solid rgba(91, 140, 255, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.gamepad-hint strong {
+  color: #9bb8ff;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Crisp focus outlines for Steam Deck / handheld gamepad & keyboard navigation */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[data-gamepad="true"] button:focus,
+[data-gamepad="true"] input:focus,
+[data-gamepad="true"] select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Handheld & Steam Deck responsive layout (1280x800, 720p, scaled 7"-8" screens) */
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 184px 1fr;
+  }
+
+  .main {
+    padding: 16px 18px;
+  }
+
+  .header-row {
+    flex-wrap: wrap;
+  }
+
+  .entry-row {
+    flex-wrap: wrap;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .brand {
+    padding: 4px 6px 4px 2px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+}
+
+@media (pointer: coarse), (max-width: 960px) {
+  .btn,
+  .nav-btn,
+  .input,
+  .select,
+  .process-item {
+    min-height: 40px;
+  }
+}

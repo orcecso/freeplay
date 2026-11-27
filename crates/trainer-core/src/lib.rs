@@ -6,6 +6,8 @@ pub mod aob;
 pub mod error;
 pub mod freezer;
 pub mod guard;
+#[cfg(target_os = "linux")]
+pub(crate) mod linux;
 pub mod memory;
 pub mod patch;
 pub mod process;

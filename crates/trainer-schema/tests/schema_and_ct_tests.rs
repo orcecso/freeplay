@@ -213,7 +213,7 @@ Power:
     ));
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod live_session_tests {
     use std::collections::HashMap;
     use std::io::{BufRead, BufReader};
@@ -241,7 +241,7 @@ mod live_session_tests {
             exe.pop();
             exe.push("target");
             exe.push("debug");
-            exe.push("dummy-target.exe");
+            exe.push(format!("dummy-target{}", std::env::consts::EXE_SUFFIX));
 
             let mut child = Command::new(&exe)
                 .stdout(Stdio::piped())
@@ -282,7 +282,7 @@ mod live_session_tests {
             id: "dummy-target-test".into(),
             game: GameTarget {
                 title: "Dummy Target".into(),
-                processes: vec!["dummy-target.exe".into()],
+                processes: vec![format!("dummy-target{}", std::env::consts::EXE_SUFFIX)],
                 steam_app_id: None,
                 game_version: Some("0.1.0".into()),
                 pointer_width: PointerWidthSchema::Bits64,

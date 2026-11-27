@@ -1,4 +1,4 @@
-#![cfg(windows)]
+#![cfg(any(windows, target_os = "linux"))]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -20,17 +20,18 @@ struct RunningTarget {
 
 impl RunningTarget {
     fn spawn() -> Self {
-        // Locate dummy-target.exe next to the test binary in target/debug/
+        // Locate dummy-target binary next to the test binary in target/debug/
+        let exe_name = format!("dummy-target{}", std::env::consts::EXE_SUFFIX);
         let mut exe = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         exe.pop(); // crates/
         exe.pop(); // freeplay/
         exe.push("target");
         exe.push("debug");
-        exe.push("dummy-target.exe");
+        exe.push(&exe_name);
 
         assert!(
             exe.exists(),
-            "dummy-target.exe not found at {:?}; run `cargo build --workspace` before running tests",
+            "{exe_name} not found at {:?}; run `cargo build --workspace` before running tests",
             exe
         );
 
@@ -82,8 +83,9 @@ fn end_to_end_memory_engine_against_dummy_target() {
     assert!(proc_handle.is_alive());
 
     // 1. Module enumeration
+    let target_module = format!("dummy-target{}", std::env::consts::EXE_SUFFIX);
     let base = proc_handle
-        .module_base("dummy-target.exe")
+        .module_base(&target_module)
         .expect("module_base");
     assert_ne!(base, 0);
 

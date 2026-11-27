@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { api, SessionStatus } from "./api";
 import { LibraryView } from "./components/LibraryView";
 import { BrowseView } from "./components/BrowseView";
@@ -7,7 +8,9 @@ import { ImportExportView } from "./components/ImportExportView";
 import { TrainerDetail } from "./components/TrainerDetail";
 import { ScannerView } from "./components/ScannerView";
 import { HelpView, BUY_ME_A_COFFEE_URL } from "./components/HelpView";
+import { useGamepadNav } from "./useGamepadNav";
 
+const TABS: Tab[] = ["library", "scanner", "browse", "repos", "import", "help"];
 type Tab = "library" | "scanner" | "browse" | "repos" | "import" | "help";
 
 function getDemoInitialState(): { tab: Tab; trainerId: string | null } {
@@ -28,6 +31,33 @@ export default function App() {
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(init.trainerId);
   const [session, setSession] = useState<SessionStatus>({ attached: false, alive: false });
   const [updateCount, setUpdateCount] = useState(0);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+
+  const gamepadConnected = useGamepadNav({
+    onPrevTab: () => {
+      if (document.querySelector(".modal-backdrop")) return;
+      setSelectedTrainerId(null);
+      setTab((cur) => TABS[(TABS.indexOf(cur) - 1 + TABS.length) % TABS.length]);
+    },
+    onNextTab: () => {
+      if (document.querySelector(".modal-backdrop")) return;
+      setSelectedTrainerId(null);
+      setTab((cur) => TABS[(TABS.indexOf(cur) + 1) % TABS.length]);
+    },
+    onBack: () => {
+      if (confirmCloseOpen) {
+        setConfirmCloseOpen(false);
+        return;
+      }
+      if (document.querySelector(".modal-backdrop")) {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        return;
+      }
+      if (selectedTrainerId) {
+        setSelectedTrainerId(null);
+      }
+    },
+  });
 
   const refreshStatus = async () => {
     try {
@@ -51,7 +81,20 @@ export default function App() {
     refreshStatus();
     refreshUpdates();
     const timer = setInterval(refreshStatus, 2500);
-    return () => clearInterval(timer);
+    let unlistenClose: (() => void) | undefined;
+    listen("app-close-requested", () => {
+      setConfirmCloseOpen(true);
+    })
+      .then((fn) => {
+        unlistenClose = fn;
+      })
+      .catch(() => {
+        // Ignore outside Tauri shell
+      });
+    return () => {
+      clearInterval(timer);
+      if (unlistenClose) unlistenClose();
+    };
   }, []);
 
   return (
@@ -146,6 +189,13 @@ export default function App() {
               <div>Open a trainer from Library to attach.</div>
             )}
           </div>
+
+          {gamepadConnected && (
+            <div className="gamepad-hint" aria-live="polite">
+              <strong>Controller Active</strong>
+              <div>LB/RB Tabs · D-Pad Move · A Select · B Back</div>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -178,6 +228,37 @@ export default function App() {
           />
         )}
       </main>
+
+      {confirmCloseOpen && (
+        <div className="modal-backdrop" onClick={() => setConfirmCloseOpen(false)}>
+          <div
+            className="modal-card"
+            style={{ maxWidth: 420 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0 }}>Close FreePlay?</h2>
+            <p className="muted" style={{ marginBottom: 16 }}>
+              {session.attached && session.alive
+                ? `Closing FreePlay will detach from ${session.process_name} (PID ${session.pid}) and stop any active freezes or patches.`
+                : "Are you sure you want to close FreePlay?"}
+            </p>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmCloseOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => {
+                  setConfirmCloseOpen(false);
+                  api.exitApp();
+                }}
+              >
+                Close App
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

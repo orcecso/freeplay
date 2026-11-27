@@ -96,7 +96,14 @@ fn write_with_protect(process: &ProcessHandle, address: usize, data: &[u8]) -> R
     write_res
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn write_with_protect(process: &ProcessHandle, address: usize, data: &[u8]) -> Result<()> {
+    // Write directly via `/proc/<pid>/mem` (FOLL_FORCE) so read-only / executable `.text`
+    // pages can be patched and cleanly reverted without stopping the game process.
+    crate::linux::write_bytes_linux(process.pid(), process.mem_file(), address, data, true)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn write_with_protect(_process: &ProcessHandle, _address: usize, _data: &[u8]) -> Result<()> {
     Err(TrainerError::UnsupportedPlatform)
 }
